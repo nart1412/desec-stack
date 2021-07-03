@@ -54,31 +54,20 @@ def random_password() -> str:
     return "".join(random.choice(string.ascii_letters) for _ in range(16))
 
 
-def random_domainname() -> str:
-    return (
-        "".join(random.choice(string.ascii_lowercase) for _ in range(16))
-        + ".test"
-    )
-
-
-def random_local_public_suffix_domainname() -> str:
-    return (
-        "".join(random.choice(string.ascii_lowercase) for _ in range(16))
-        + ".dedyn."
-        + os.environ['DESECSTACK_DOMAIN']
-    )
+def random_domainname(suffix='test') -> str:
+    return "".join(random.choice(string.ascii_lowercase) for _ in range(16)) + f'.{suffix}'
 
 
 class DeSECAPIV1Client:
     base_url = "https://desec." + os.environ["DESECSTACK_DOMAIN"] + "/api/v1"
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "e2e2",
-    }
 
     def __init__(self) -> None:
         super().__init__()
+        self.headers = {  # instance-local
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "e2e2",
+        }
         self.email = None
         self.password = None
         self.domains = {}
@@ -172,6 +161,9 @@ class DeSECAPIV1Client:
     def get(self, path: str, **kwargs) -> requests.Response:
         return self._request("GET", path=path, **kwargs)
 
+    def options(self, path: str, **kwargs) -> requests.Response:
+        return self._request("OPTIONS", path=path, **kwargs)
+
     def post(self, path: str, data: Optional[dict] = None, **kwargs) -> requests.Response:
         return self._request("POST", path=path, data=data, **kwargs)
 
@@ -203,9 +195,10 @@ class DeSECAPIV1Client:
         response = self.post(
             "/auth/login/", data={"email": email, "password": password}
         )
-        token = response.json().get('token')
-        if token is not None:
-            self.headers["Authorization"] = f'Token {response.json()["token"]}'
+        self.token = response.json().get('token')
+        print(email, self.token)
+        if self.token is not None:
+            self.headers["Authorization"] = f'Token {self.token}'
             self.patch(  # make token last forever
                 f"/auth/tokens/{response.json().get('id')}/",
                 data={'max_unused_period': None, 'max_age': None}
@@ -268,12 +261,24 @@ class DeSECAPIV1Client:
         return {' '.join(param) for param in params}
 
 
+class DeSECAPIV2Client(DeSECAPIV1Client):
+    base_url = "https://desec." + os.environ["DESECSTACK_DOMAIN"] + "/api/v2"
+
+
 @pytest.fixture
 def api_anon() -> DeSECAPIV1Client:
     """
     Anonymous access to the API.
     """
     return DeSECAPIV1Client()
+
+
+@pytest.fixture
+def api_anon_v2() -> DeSECAPIV2Client:
+    """
+    Anonymous access to the API.
+    """
+    return DeSECAPIV2Client()
 
 
 @pytest.fixture()
@@ -297,6 +302,29 @@ def api_user_domain(api_user) -> DeSECAPIV1Client:
     no records other than the default ones.
     """
     api_user.domain_create(random_domainname())
+    return api_user
+
+
+api_user_lps = api_user
+
+
+@pytest.fixture()
+def lps(api_user_lps) -> DeSECAPIV1Client:
+    """
+    Access to the API with a fresh user account that owns a local public suffix.
+    """
+    lps = "dedyn." + os.environ['DESECSTACK_DOMAIN']
+    api_user_lps.domain_create(lps)  # may return 400 if exists, but that's ok
+    return lps
+
+
+@pytest.fixture()
+def api_user_lps_domain(api_user, lps) -> DeSECAPIV1Client:
+    """
+    Access to the API with a fresh user account that owns a domain with random name under a local public suffix.
+    The domain has no records other than the default ones.
+    """
+    api_user.domain_create(random_domainname(suffix=lps))
     return api_user
 
 
@@ -375,10 +403,11 @@ def return_eventually(expression: callable, min_pause: float = .1, max_pause: fl
             wait = min(2 * wait, max_pause)
 
 
-def assert_eventually(assertion: callable, min_pause: float = .1, max_pause: float = 2, timeout: float = 5) -> None:
+def assert_eventually(assertion: callable, min_pause: float = .1, max_pause: float = 2, timeout: float = 5,
+                      retry_on: Tuple[type] = (AssertionError,)) -> None:
     def _assert():
         assert assertion()
-    return_eventually(_assert, min_pause, max_pause, timeout, retry_on=(AssertionError,))
+    return_eventually(_assert, min_pause, max_pause, timeout, retry_on=retry_on)
 
 
 def faketime(t: str):
