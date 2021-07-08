@@ -16,7 +16,7 @@ def test_homepage_CORS(api_anon: DeSECAPIV1Client):
 
     api_anon.headers['Access-Control-Request-Headers'] = 'Authorization'
     api_anon.headers['Access-Control-Request-Method'] = 'POST'
-    assert 'authorization' in api_anon.options("/").headers['access-control-allow-headers']
+    assert 'authorization' in api_anon.options("/").headers['access-control-allow-headers'].split(', ')
 
 
 def test_homepage_v2(api_anon_v2: DeSECAPIV2Client):

@@ -29,20 +29,20 @@ def test_apex_update(api_user_lps_domain: DeSECAPIV1Client, auth_method, base_ur
         assert response.text == 'good'
 
         api_user_lps_domain.headers = api_headers.copy()
-        rrsets_api = {
+        rrs_api = {
             qtype: {record
                     for rrset in api_user_lps_domain.get(f'/domains/{domain_name}/rrsets/?subname=&type={qtype}').json()
                     for record in rrset['records']
                     }
             for qtype in ['A', 'AAAA']
         }
-        rrsets_dns = {qtype: NSLordClient.query(domain_name, qtype) for qtype in ['A', 'AAAA']}
+        rrs_dns = {qtype: NSLordClient.query(domain_name, qtype) for qtype in ['A', 'AAAA']}
 
         for expected_net, qtype in [(expected_ipv4, 'A'), (expected_ipv6, 'AAAA')]:
-            assert len(rrsets_api[qtype]) == (1 if expected_net else 0)
-            assert len(rrsets_dns[qtype]) == (1 if expected_net else 0)
-            assert _ips_in_network(rrsets_api[qtype], expected_net)
-            assert _ips_in_network(rrsets_dns[qtype], expected_net)
+            assert len(rrs_api[qtype]) == (1 if expected_net else 0)
+            assert len(rrs_dns[qtype]) == (1 if expected_net else 0)
+            assert _ips_in_network(rrs_api[qtype], expected_net)
+            assert _ips_in_network(rrs_dns[qtype], expected_net)
             assert_eventually(lambda: _ips_in_network(query_replication(domain_name, '', qtype), expected_net))
 
     headers = {}
