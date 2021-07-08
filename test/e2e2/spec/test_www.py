@@ -1,4 +1,3 @@
-from contextlib import ContextDecorator
 import ipaddress
 import os
 import socket
@@ -14,7 +13,7 @@ ipv4 = os.environ['DESECSTACK_IPV4_REAR_PREFIX16'] + '.0.128'
 ipv6 = os.environ['DESECSTACK_IPV6_ADDRESS']
 
 
-class HostsOverride(ContextDecorator):
+class HostsOverride:
     def __init__(self, host, ip):
         self.cache = {host: ip}
 
