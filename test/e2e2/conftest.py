@@ -323,6 +323,17 @@ def api_user_domain(api_user) -> DeSECAPIV1Client:
     return api_user
 
 
+@pytest.fixture()
+def api_user_domain_rrsets(api_user_domain, init_rrsets) -> DeSECAPIV1Client:
+    """
+    Access to the API with a fresh user account that owns a domain with random name. The domain is
+    equipped with RRsets from init_rrsets.
+    """
+    api_user_domain.post(f"/domains/{api_user_domain.domain}/rrsets/", data=init_rrsets)
+    ## TODO test they're there
+    return api_user_domain
+
+
 api_user_lps = api_user
 
 
